@@ -30,6 +30,7 @@ def get_available_formats(url):
 def download_video(url, format_id, progress_bar):
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
+            st.write(f"Temporary directory created at {temp_dir}")
             ydl_opts = {
                 'format': f'{format_id}+bestaudio/best' if format_id != 'bestaudio/best' else 'bestaudio/best',
                 'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
@@ -46,12 +47,16 @@ def download_video(url, format_id, progress_bar):
                 })
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                st.write("Starting download...")
                 ydl.download([url])
+                st.write("Download finished.")
             
             downloaded_files = os.listdir(temp_dir)
+            st.write(f"Downloaded files: {downloaded_files}")
             if downloaded_files:
                 file_path = os.path.join(temp_dir, downloaded_files[0])
                 with open(file_path, "rb") as file:
+                    st.write(f"Reading file {file_path}")
                     return io.BytesIO(file.read()), os.path.basename(file_path)
     except Exception as e:
         st.error(f"Error during download: {str(e)}")
