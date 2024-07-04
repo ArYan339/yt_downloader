@@ -28,23 +28,23 @@ def get_available_formats(url):
             return []
 
 def download_video(url, format_id, progress_bar):
-    with tempfile.TemporaryDirectory() as temp_dir:
-        ydl_opts = {
-            'format': f'{format_id}+bestaudio/best' if format_id != 'bestaudio/best' else 'bestaudio/best',
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-            'progress_hooks': [lambda d: update_progress(d, progress_bar)],
-        }
-        
-        if format_id == 'bestaudio/best':
-            ydl_opts.update({
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-            })
-        
-        try:
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ydl_opts = {
+                'format': f'{format_id}+bestaudio/best' if format_id != 'bestaudio/best' else 'bestaudio/best',
+                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+                'progress_hooks': [lambda d: update_progress(d, progress_bar)],
+            }
+            
+            if format_id == 'bestaudio/best':
+                ydl_opts.update({
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                })
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             
@@ -53,8 +53,9 @@ def download_video(url, format_id, progress_bar):
                 file_path = os.path.join(temp_dir, downloaded_files[0])
                 with open(file_path, "rb") as file:
                     return io.BytesIO(file.read()), os.path.basename(file_path)
-        except Exception as e:
-            st.error(f"Error during download: {str(e)}")
+    except Exception as e:
+        st.error(f"Error during download: {str(e)}")
+        st.stop()
     
     return None, None
 
