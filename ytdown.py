@@ -3,9 +3,6 @@ import yt_dlp
 import os
 from pathlib import Path
 
-st.set_page_config(page_title="Video Downloader", page_icon="🎥", layout="wide")
-st.server.max_request_size = 1000  # Increase the request size limit (in MB)
-st.server.max_message_size = 1000  # Increase the message size limit (in MB)
 
 def get_available_formats(url):
     ydl_opts = {'quiet': True, 'no_warnings': True}
