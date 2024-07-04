@@ -6,9 +6,12 @@ import logging
 from pathlib import Path
 import threading
 import time
+import sys
+import traceback
+import requests
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def get_available_formats(url):
@@ -69,8 +72,22 @@ def download_video(url, format_id, progress_bar, result):
                 raise Exception("No files were downloaded")
             
             result['success'] = True
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error: {str(e)}")
+            result['success'] = False
+            result['error'] = "Connection error. Please check your internet connection and try again."
+        except OSError as e:
+            if e.errno == 32:  # Broken pipe
+                logger.error(f"Broken pipe error: {str(e)}")
+                result['success'] = False
+                result['error'] = "Download interrupted. Please try again or choose a different format."
+            else:
+                logger.error(f"OS error: {str(e)}")
+                result['success'] = False
+                result['error'] = f"OS error: {str(e)}"
         except Exception as e:
             logger.error(f"Error in download_video: {str(e)}")
+            logger.error(traceback.format_exc())
             result['success'] = False
             result['error'] = str(e)
 
