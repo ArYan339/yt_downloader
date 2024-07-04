@@ -2,6 +2,8 @@ import streamlit as st
 import yt_dlp
 import os
 from pathlib import Path
+from threading import Thread
+from queue import Queue
 
 def get_available_formats(url):
     ydl_opts = {'quiet': True, 'no_warnings': True}
@@ -26,12 +28,12 @@ def get_available_formats(url):
         
         return unique_resolutions
 
-def download_video(url, format_id, progress_bar):
+def download_video(url, format_id, progress_queue):
     download_path = str(Path.home() / "Downloads")
     ydl_opts = {
         'format': f'{format_id}+bestaudio/best' if format_id != 'bestaudio/best' else 'bestaudio/best',
         'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
-        'progress_hooks': [lambda d: update_progress(d, progress_bar)],
+        'progress_hooks': [lambda d: progress_queue.put(d)],
     }
     
     # If audio-only is selected, add postprocessing for MP3 conversion
@@ -49,17 +51,24 @@ def download_video(url, format_id, progress_bar):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
-        st.error(f"An error occurred during download: {str(e)}")
+        progress_queue.put({'error': str(e)})
 
-def update_progress(d, progress_bar):
-    if d['status'] == 'downloading':
-        percent = d['_percent_str']
-        try:
-            progress_bar.progress(float(percent.strip('%').strip()) / 100)
-        except ValueError:
-            pass
-    elif d['status'] == 'finished':
-        progress_bar.progress(1.0)
+def update_progress(progress_queue, progress_bar):
+    while True:
+        d = progress_queue.get()
+        if 'error' in d:
+            st.error(f"An error occurred during download: {d['error']}")
+            break
+        if d['status'] == 'downloading':
+            percent = d['_percent_str']
+            try:
+                progress_bar.progress(float(percent.strip('%').strip()) / 100)
+            except ValueError:
+                pass
+        elif d['status'] == 'finished':
+            progress_bar.progress(1.0)
+            st.success("Download completed!")
+            break
 
 st.title("Video Downloader")
 
@@ -78,8 +87,10 @@ if url:
 
         if st.button("Download"):
             progress_bar = st.progress(0)
-            download_video(url, selected_format_id, progress_bar)
-            st.success("Download completed!")
+            progress_queue = Queue()
+            download_thread = Thread(target=download_video, args=(url, selected_format_id, progress_queue))
+            download_thread.start()
+            update_progress(progress_queue, progress_bar)
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
 else:
