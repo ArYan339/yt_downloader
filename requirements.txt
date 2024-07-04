@@ -2,3 +2,4 @@ yt_dlp
 ffmpeg
 ffprobe
 yt-dlp
+streamlit
