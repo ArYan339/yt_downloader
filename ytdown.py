@@ -4,28 +4,12 @@ import os
 import tempfile
 import logging
 from pathlib import Path
-import signal
-from contextlib import contextmanager
+import threading
 import time
-import sys
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-class TimeoutException(Exception):
-    pass
-
-@contextmanager
-def time_limit(seconds):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-    signal.signal(signal.SIGALRM, signal_handler)
-    signal.alarm(seconds)
-    try:
-        yield
-    finally:
-        signal.alarm(0)
 
 def get_available_formats(url):
     ydl_opts = {'quiet': True, 'no_warnings': True}
@@ -48,7 +32,7 @@ def get_available_formats(url):
         logger.error(f"Error in get_available_formats: {str(e)}")
         raise
 
-def download_video(url, format_id, progress_bar):
+def download_video(url, format_id, progress_bar, result):
     with tempfile.TemporaryDirectory() as temp_dir:
         ydl_opts = {
             'format': f'{format_id}+bestaudio/best' if format_id != 'bestaudio/best' else 'bestaudio/best',
@@ -67,9 +51,8 @@ def download_video(url, format_id, progress_bar):
             })
         
         try:
-            with time_limit(300):  # 5 minutes timeout
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
             
             # After successful download, move the file to the user's download directory
             download_path = str(Path.home() / "Downloads")
@@ -85,15 +68,11 @@ def download_video(url, format_id, progress_bar):
             if not files_moved:
                 raise Exception("No files were downloaded")
             
-            return True
-        except TimeoutException:
-            logger.error("Download timed out")
-            raise
+            result['success'] = True
         except Exception as e:
             logger.error(f"Error in download_video: {str(e)}")
-            logger.error(f"Python version: {sys.version}")
-            logger.error(f"yt-dlp version: {yt_dlp.version.__version__}")
-            raise
+            result['success'] = False
+            result['error'] = str(e)
 
 def update_progress(d, progress_bar):
     if d['status'] == 'downloading':
@@ -123,19 +102,27 @@ if url:
 
         if st.button("Download"):
             progress_bar = st.progress(0)
-            try:
-                success = download_video(url, selected_format_id, progress_bar)
-                if success:
-                    st.success("Download completed!")
-                else:
-                    st.error("Download failed. Please try again.")
-            except TimeoutException:
-                st.error("Download timed out. Please try again or choose a different format.")
-            except Exception as e:
-                st.error(f"Download failed: {str(e)}")
-                logger.exception("Detailed error information:")
+            result = {'success': False, 'error': None}
+            
+            # Start download in a separate thread
+            download_thread = threading.Thread(target=download_video, args=(url, selected_format_id, progress_bar, result))
+            download_thread.start()
+            
+            # Wait for the download to complete or timeout
+            timeout = 300  # 5 minutes
+            start_time = time.time()
+            while download_thread.is_alive():
+                if time.time() - start_time > timeout:
+                    st.error("Download timed out. Please try again or choose a different format.")
+                    return
+                time.sleep(1)
+            
+            if result['success']:
+                st.success("Download completed!")
+            else:
+                st.error(f"Download failed: {result['error']}")
     except Exception as e:
-        logger.exception(f"An error occurred:")
+        logger.exception("An error occurred:")
         st.error(f"An error occurred: {str(e)}")
 else:
     st.info("Please enter a valid URL to start.")
