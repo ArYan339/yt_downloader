@@ -3,7 +3,6 @@ import yt_dlp
 import os
 from pathlib import Path
 
-
 def get_available_formats(url):
     ydl_opts = {'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -46,8 +45,11 @@ def download_video(url, format_id, progress_bar):
             'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
         })
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        st.error(f"An error occurred during download: {str(e)}")
 
 def update_progress(d, progress_bar):
     if d['status'] == 'downloading':
